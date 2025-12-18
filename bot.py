@@ -13,7 +13,10 @@ bot = Bot(BOT_TOKEN)
 from aiogram.fsm.storage.memory import MemoryStorage
 
 dp = Dispatcher(storage=MemoryStorage())
+from aiogram.fsm.middleware import FSMContextMiddleware
 
+dp.message.middleware(FSMContextMiddleware())
+dp.callback_query.middleware(FSMContextMiddleware())
 user_lang = {}
 user_city = {}
 
