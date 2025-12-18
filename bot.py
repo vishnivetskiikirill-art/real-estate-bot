@@ -35,17 +35,19 @@ async def start(msg: Message):
 # --- LANGUAGE ---
 user_lang = {}
 
+
 @dp.callback_query(F.data.startswith("lang_"))
 async def set_lang(cb: CallbackQuery):
-    await cb.answer()  # 🔴 ОБЯЗАТЕЛЬНО
+    await cb.answer()  # ✅ ОБЯЗАТЕЛЬНО
 
     lang = cb.data.split("_")[1]
     user_lang[cb.from_user.id] = lang
 
     await cb.message.edit_text(
         TEXTS[lang]["menu"],
-        reply_markup=main_menu(lang)
+        reply_markup=main_menu(lang)  # ✅ передаём язык
     )
+
 
 # --- BUY PROPERTY (START FSM) ---
 @dp.message(F.text == "Купить недвижимость")
@@ -117,5 +119,5 @@ async def main():
     await dp.start_polling(bot)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # ✅ ВАЖНО
     asyncio.run(main())
