@@ -1,32 +1,53 @@
-import asynciofrom aiogram.fsm.context 
-import FSMContext
-from states import SearchState
+import asyncio
+
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, CallbackQuery
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.memory import MemoryStorage
+
 from config import BOT_TOKEN, ADMIN_ID
 from texts import TEXTS
 from keyboards import *
 from database import connect_db, fetch, execute
 from models import CREATE_PROPERTIES, CREATE_REQUESTS
+from states import SearchState
 
+
+# --- BOT & DISPATCHER ---
 bot = Bot(BOT_TOKEN)
-from aiogram.fsm.storage.memory import MemoryStorage
-
 dp = Dispatcher(storage=MemoryStorage())
-from aiogram.fsm.middleware import FSMContextMiddleware
 
-dp.message.middleware(FSMContextMiddleware())
-dp.callback_query.middleware(FSMContextMiddleware())
-user_lang = {}
-user_city = {}
 
+# --- STARTUP ---
 @dp.startup()
 async def startup():
     await connect_db()
     await execute(CREATE_PROPERTIES)
     await execute(CREATE_REQUESTS)
 
+
+# --- /start ---
 @dp.message(F.text == "/start")
+async def start(msg: Message):
+    await msg.answer(TEXTS["ru"]["start"], reply_markup=languages())
+
+
+# --- LANGUAGE ---
+user_lang = {}
+
+
+@dp.callback_query(F.data.startswith("lang_"))
+async def set_lang(cb: CallbackQuery):
+    lang = cb.data.split("_")[1]
+    user_lang[cb.from_user.id] = lang
+
+    await cb.message.edit_text(
+        TEXTS[lang]["menu"],
+        reply_markup=main_menu()
+    )
+
+
+# --- BUY PROPERTY (START FSM) ---
 @dp.message(F.text == "Купить недвижимость")
 async def start_search(message: Message, state: FSMContext):
     await state.clear()
@@ -34,81 +55,67 @@ async def start_search(message: Message, state: FSMContext):
 
     await message.answer(
         "Выберите город:",
-        reply_markup=city_keyboard  )
-async def start(msg: Message):
-    await msg.answer(TEXTS["ru"]["start"], reply_markup=languages())
-
-@dp.callback_query(F.data.startswith("lang_"))
-async def set_lang(cb: CallbackQuery):
-    lang = cb.data.split("_")[1]
-    user_lang[cb.from_user.id] = lang
-    await cb.message.edit_text(
-        TEXTS[lang]["menu"],
-        reply_markup=main_menu(TEXTS[lang])
+        reply_markup=city_keyboard
     )
 
-@dp.callback_query(F.data == "buy")
-async def buy(cb: CallbackQuery):
-    lang = user_lang.get(cb.from_user.id, "ru")
-    await cb.message.edit_text(
-        TEXTS[lang]["city"],
-        reply_markup=cities()
+
+# --- CITY ---
+@dp.message(SearchState.city)
+async def choose_city(message: Message, state: FSMContext):
+    await state.update_data(city=message.text)
+    await state.set_state(SearchState.district)
+
+    await message.answer(
+        "Выберите район:",
+        reply_markup=district_keyboard
     )
 
-@dp.callback_query(F.data.startswith("city_"))
-async def choose_city(cb: CallbackQuery):
-    city = cb.data.replace("city_", "")
-    user_city[cb.from_user.id] = city
 
-    rows = await fetch(
-        "SELECT DISTINCT district FROM properties WHERE city=$1",
-        city
-    )
-    districts_list = [r["district"] for r in rows]
+# --- DISTRICT ---
+@dp.message(SearchState.district)
+async def choose_district(message: Message, state: FSMContext):
+    await state.update_data(district=message.text)
+    await state.set_state(SearchState.property_type)
 
-    await cb.message.edit_text(
-        TEXTS[user_lang.get(cb.from_user.id, "ru")]["district"],
-        reply_markup=districts(districts_list)
+    await message.answer(
+        "Тип недвижимости:",
+        reply_markup=type_keyboard
     )
 
-@dp.callback_query(F.data.startswith("district_"))
-async def show_properties(cb: CallbackQuery):
-    district = cb.data.replace("district_", "")
-    city = user_city.get(cb.from_user.id)
 
-    props = await fetch(
-        "SELECT * FROM properties WHERE city=$1 AND district=$2",
-        city, district
+# --- TYPE ---
+@dp.message(SearchState.property_type)
+async def choose_type(message: Message, state: FSMContext):
+    await state.update_data(property_type=message.text)
+    await state.set_state(SearchState.price)
+
+    await message.answer(
+        "Выберите бюджет:",
+        reply_markup=price_keyboard
     )
 
-    for p in props:
-        await bot.send_photo(
-            cb.from_user.id,
-            p["photo"],
-            caption=f"🏠 {p['title']}\n💰 {p['price']}",
-            reply_markup=request_btn(p["id"])
-        )
 
-@dp.callback_query(F.data.startswith("req_"))
-async def request(cb: CallbackQuery):
-    pid = int(cb.data.split("_")[1])
+# --- PRICE (TEST OUTPUT) ---
+@dp.message(SearchState.price)
+async def choose_price(message: Message, state: FSMContext):
+    await state.update_data(price=message.text)
+    data = await state.get_data()
 
-    await execute(
-        "INSERT INTO requests (property_id, user_id, username) VALUES ($1,$2,$3)",
-        pid,
-        cb.from_user.id,
-        cb.from_user.username
+    await message.answer(
+        "🔎 Поиск недвижимости:\n\n"
+        f"Город: {data['city']}\n"
+        f"Район: {data['district']}\n"
+        f"Тип: {data['property_type']}\n"
+        f"Бюджет: {data['price']}"
     )
 
-    await bot.send_message(
-        ADMIN_ID,
-        f"📩 Новая заявка\nОбъект #{pid}\n@{cb.from_user.username}"
-    )
+    await state.clear()
 
-    await cb.message.answer("✅ Заявка отправлена")
 
+# --- RUN ---
 async def main():
     await dp.start_polling(bot)
 
-if __name__ == "__main__":
+
+if name == "__main__":
     asyncio.run(main())
