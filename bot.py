@@ -1,4 +1,6 @@
-import asyncio
+import asynciofrom aiogram.fsm.context 
+import FSMContext
+from states import SearchState
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, CallbackQuery
 from config import BOT_TOKEN, ADMIN_ID
@@ -8,7 +10,9 @@ from database import connect_db, fetch, execute
 from models import CREATE_PROPERTIES, CREATE_REQUESTS
 
 bot = Bot(BOT_TOKEN)
-dp = Dispatcher()
+from aiogram.fsm.storage.memory import MemoryStorage
+
+dp = Dispatcher(storage=MemoryStorage())
 
 user_lang = {}
 user_city = {}
@@ -20,6 +24,14 @@ async def startup():
     await execute(CREATE_REQUESTS)
 
 @dp.message(F.text == "/start")
+@dp.message(F.text == "Купить недвижимость")
+async def start_search(message: Message, state: FSMContext):
+    await state.clear()
+    await state.set_state(SearchState.city)
+
+    await message.answer(
+        "Выберите город:",
+        reply_markup=city_keyboard  )
 async def start(msg: Message):
     await msg.answer(TEXTS["ru"]["start"], reply_markup=languages())
 
