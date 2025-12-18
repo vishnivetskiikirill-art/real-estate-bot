@@ -35,17 +35,17 @@ async def start(msg: Message):
 # --- LANGUAGE ---
 user_lang = {}
 
-
 @dp.callback_query(F.data.startswith("lang_"))
 async def set_lang(cb: CallbackQuery):
+    await cb.answer()  # 🔴 ОБЯЗАТЕЛЬНО
+
     lang = cb.data.split("_")[1]
     user_lang[cb.from_user.id] = lang
 
     await cb.message.edit_text(
         TEXTS[lang]["menu"],
-        reply_markup=main_menu()
+        reply_markup=main_menu(lang)
     )
-
 
 # --- BUY PROPERTY (START FSM) ---
 @dp.message(F.text == "Купить недвижимость")
