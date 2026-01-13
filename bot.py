@@ -12,9 +12,40 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 user_data = {}
 
 CITY_DISTRICTS = {
-    "Varna": ["Center", "Asparuhovo", "Vladislavovo"],
-    "Burgas": ["Center", "Lazur", "Izgrev"],
-    "Sofia": ["Center", "Lozenets", "Mladost"],
+    "Varna": [
+        "Center (Център)",
+        "Asparuhovo (Аспарухово)",
+        "Galata (Галата)",
+        "Briz (Бриз)",
+        "Chayka (Чайка)",
+        "Levski (Левски)",
+        "Mladost (Младост)",
+        "Vazrazhdane (Възраждане)",
+        "Vladislav Varnenchik / Vladislavovo (Владислав Варненчик)",
+        "Kaisieva Gradina (Кайсиева градина)",
+        "Troshevo (Трошево)",
+        "Pobeda (Победа)",
+        "Izgrev (Изгрев)",
+        "Tsveten kvartal (Цветен квартал)",
+        "Hristo Botev (Христо Ботев)",
+        "Kolhozen pazar (Колхозен пазар)",
+        "Pogrebite (Погребите)",
+        "Greek quarter (Гръцката махала)",
+        "Maksuda (Максуда)",
+        "Morska gradina (Морска градина)",
+        "Vinitsa (Виница)",
+        "Alen Mak (Ален мак)",
+        "Euxinograd (Евксиноград)",
+        "Trakata (Траката)",
+        "Zapadna promishlena zona (Западна промишлена зона)",
+        "St. Ivan Rilski (Свети Иван Рилски)",
+        "Golden Sands (Златни пясъци)",
+        "Golden Sands Park (Златни пясъци - парк)",
+        "Riviera (Ривиера)",
+        "Konstantin i Elena (Константин и Елена)",
+        "Slanchev den (Слънчев ден)",
+        "Chayka resort (Чайка - курорт)",
+    ]
 }
 
 def get_profile(user_id):
