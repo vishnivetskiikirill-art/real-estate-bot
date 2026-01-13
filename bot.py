@@ -147,27 +147,6 @@ async def cb_type(call: CallbackQuery):
 
     await call.message.answer(msg, reply_markup=main_menu(l))
     await call.answer()
-    # ---------- TYPE ----------
-@dp.callback_query(F.data.startswith("type:"))
-async def cb_type(call: CallbackQuery):
-    uid = call.from_user.id
-    p = profile(uid)
-
-    ptype = call.data.split(":", 1)[1]
-    p["type"] = ptype
-
-    district_title = VARNA_DISTRICTS.get(p["district_id"], p["district_id"])
-    l = lang(uid)
-
-    if l == "en":
-        msg = f"✅ Selected:\nCity: Varna\nDistrict: {district_title}\nType: {ptype}\n\nNext: show listings from DB."
-    elif l == "bg":
-        msg = f"✅ Избрано:\nГрад: Varna\nКвартал: {district_title}\nТип: {ptype}\n\nСледващо: обяви от базата."
-    else:
-        msg = f"✅ Выбрано:\nГород: Varna\nРайон: {district_title}\nТип: {ptype}\n\nДальше: покажем объекты из базы."
-
-    await call.message.answer(msg, reply_markup=main_menu(l))
-    await call.answer()
 
 
 # ---------- NAV (BACK) ----------
@@ -203,9 +182,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-# ---------- NAV (BACK) ----------
-@dp.callback_query(F.data == "nav:menu")
-async def nav_menu(call: CallbackQuery):
-    uid = call.from_user.id
