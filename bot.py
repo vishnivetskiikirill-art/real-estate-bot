@@ -18,8 +18,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 dp = Dispatcher()
 
-# user_id -> state
-# {"lang": "ru", "city": "varna", "district_id": "center", "type": "apartment"}
+# user_id -> {"lang": "ru", "city": "varna", "district_id": "center", "type": "apartment"}
 user_state: dict[int, dict] = {}
 
 
@@ -37,12 +36,14 @@ def tr(uid: int) -> dict:
     return TEXTS.get(lang(uid), TEXTS["ru"])
 
 
+# ---------- /start ----------
 @dp.message(F.text == "/start")
 async def start_cmd(message: Message):
+    # показываем выбор языка
     await message.answer(TEXTS["ru"]["start"], reply_markup=languages())
 
 
-# ---------- LANG ----------
+# ---------- language ----------
 @dp.callback_query(F.data.startswith("lang:"))
 async def cb_lang(call: CallbackQuery):
     uid = call.from_user.id
@@ -54,10 +55,10 @@ async def cb_lang(call: CallbackQuery):
     p["type"] = None
 
     await call.message.answer(TEXTS[p["lang"]]["menu"], reply_markup=main_menu(p["lang"]))
-    await call.answer()  # важно!
+    await call.answer()
 
 
-# ---------- MENU ACTIONS ----------
+# ---------- menu actions ----------
 @dp.callback_query(F.data == "act:buy")
 async def cb_buy(call: CallbackQuery):
     uid = call.from_user.id
@@ -67,7 +68,7 @@ async def cb_buy(call: CallbackQuery):
     p["district_id"] = None
     p["type"] = None
 
-    await call.message.answer(tr(uid)["city"], reply_markup=cities())
+    await call.message.answer(tr(uid)["city"], reply_markup=cities(lang(uid)))
     await call.answer()
 
 
@@ -75,6 +76,7 @@ async def cb_buy(call: CallbackQuery):
 async def cb_contact(call: CallbackQuery):
     uid = call.from_user.id
     l = lang(uid)
+
     if l == "en":
         txt = "📞 Contact agent: @your_agent_username"
     elif l == "bg":
@@ -86,7 +88,7 @@ async def cb_contact(call: CallbackQuery):
     await call.answer()
 
 
-# ---------- CITY ----------
+# ---------- city ----------
 @dp.callback_query(F.data == "city:varna")
 async def cb_city(call: CallbackQuery):
     uid = call.from_user.id
@@ -96,11 +98,11 @@ async def cb_city(call: CallbackQuery):
     p["district_id"] = None
     p["type"] = None
 
-    await call.message.answer(tr(uid)["district"], reply_markup=districts_varna())
+    await call.message.answer(tr(uid)["district"], reply_markup=districts_varna(lang(uid)))
     await call.answer()
 
 
-# ---------- DISTRICT ----------
+# ---------- district ----------
 @dp.callback_query(F.data.startswith("dist:"))
 async def cb_district(call: CallbackQuery):
     uid = call.from_user.id
@@ -126,7 +128,7 @@ async def cb_district(call: CallbackQuery):
     await call.answer()
 
 
-# ---------- TYPE ----------
+# ---------- type ----------
 @dp.callback_query(F.data.startswith("type:"))
 async def cb_type(call: CallbackQuery):
     uid = call.from_user.id
@@ -135,21 +137,48 @@ async def cb_type(call: CallbackQuery):
     ptype = call.data.split(":", 1)[1]
     p["type"] = ptype
 
-    district_title = VARNA_DISTRICTS.get(p["district_id"], p["district_id"])
     l = lang(uid)
 
-    if l == "en":
-        msg = f"✅ Selected:\nCity: Varna\nDistrict: {district_title}\nType: {ptype}\n\nNext: show listings from DB."
-    elif l == "bg":
-        msg = f"✅ Избрано:\nГрад: Varna\nКвартал: {district_title}\nТип: {ptype}\n\nСледващо: обяви от базата."
+    # Красивое название района по языку
+    names = VARNA_DISTRICTS.get(p["district_id"])
+    if names:
+        district_title = names[{"ru": 0, "en": 1, "bg": 2}.get(l, 0)]
     else:
-        msg = f"✅ Выбрано:\nГород: Varna\nРайон: {district_title}\nТип: {ptype}\n\nДальше: покажем объекты из базы."
+        district_title = p["district_id"]
+
+    # Название города по языку
+    city_title = "Varna" if l == "en" else "Варна"
+
+    if l == "en":
+        msg = (
+            f"✅ Selected:\n"
+            f"City: {city_title}\n"
+            f"District: {district_title}\n"
+            f"Type: {ptype}\n\n"
+            f"Next: show listings from DB."
+        )
+    elif l == "bg":
+        msg = (
+            f"✅ Избрано:\n"
+            f"Град: {city_title}\n"
+            f"Квартал: {district_title}\n"
+            f"Тип: {ptype}\n\n"
+            f"Следващо: обяви от базата."
+        )
+    else:
+        msg = (
+            f"✅ Выбрано:\n"
+            f"Город: {city_title}\n"
+            f"Район: {district_title}\n"
+            f"Тип: {ptype}\n\n"
+            f"Дальше: покажем объекты из базы."
+        )
 
     await call.message.answer(msg, reply_markup=main_menu(l))
     await call.answer()
 
 
-# ---------- NAV (BACK) ----------
+# ---------- navigation (back) ----------
 @dp.callback_query(F.data == "nav:menu")
 async def nav_menu(call: CallbackQuery):
     uid = call.from_user.id
@@ -161,17 +190,18 @@ async def nav_menu(call: CallbackQuery):
 @dp.callback_query(F.data == "nav:city")
 async def nav_city(call: CallbackQuery):
     uid = call.from_user.id
-    await call.message.answer(tr(uid)["city"], reply_markup=cities())
+    await call.message.answer(tr(uid)["city"], reply_markup=cities(lang(uid)))
     await call.answer()
 
 
 @dp.callback_query(F.data == "nav:dist")
 async def nav_dist(call: CallbackQuery):
     uid = call.from_user.id
-    await call.message.answer(tr(uid)["district"], reply_markup=districts_varna())
+    await call.message.answer(tr(uid)["district"], reply_markup=districts_varna(lang(uid)))
     await call.answer()
 
 
+# ---------- entry ----------
 async def main():
     if not BOT_TOKEN:
         raise RuntimeError("BOT_TOKEN is not set")
