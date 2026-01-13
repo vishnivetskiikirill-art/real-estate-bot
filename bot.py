@@ -70,18 +70,20 @@ dp = Dispatcher()
 async def start(message: Message):
     await message.answer(TEXTS["ru"]["start"], reply_markup=languages())
 
-@dp.callback_query(F.data.startswith("lang_"))
-async def set_lang(call: CallbackQuery):
+@dp.callback_query(F.data.startswith("city_"))
+async def pick_city(call: CallbackQuery):
     uid = call.from_user.id
-    lang = call.data.replace("lang_", "")
+    city = call.data.replace("city_", "")
     p = get_profile(uid)
-    p["lang"] = lang
-    p["city"] = None
-    p["district"] = None
-    p["type"] = None
-    await call.message.answer(TEXTS[lang]["menu"], reply_markup=main_menu(lang))
-    await call.answer()
+    p["city"] = city
 
+    await call.message.answer(
+        tr(uid)["district"],
+        reply_markup=districts(CITY_DISTRICTS[city])
+    )
+
+    # ВАЖНО: закрываем "Загрузка..."
+    await call.answer()
 @dp.callback_query(F.data == "buy")
 async def buy(call: CallbackQuery):
     uid = call.from_user.id
