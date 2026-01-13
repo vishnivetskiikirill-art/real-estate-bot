@@ -2,39 +2,40 @@ answer(msg, reply_markup=main_menu(lang))
     await call.answer()
 
 
-# ----------- Назад -----------
+# ---------- BACK BUTTONS ----------
 
 @dp.callback_query(F.data == "back_menu")
-async def back_menu(call: CallbackQuery):
+async def cb_back_menu(call: CallbackQuery):
     uid = call.from_user.id
-    lang = lang_of(uid)
+    lang = get_lang(uid)
     await call.message.answer(TEXTS.get(lang, TEXTS["ru"])["menu"], reply_markup=main_menu(lang))
     await call.answer()
 
 
 @dp.callback_query(F.data == "back_city")
-async def back_to_city(call: CallbackQuery):
+async def cb_back_city(call: CallbackQuery):
     uid = call.from_user.id
-    await call.message.answer(t(uid)["city"], reply_markup=cities())
+    await call.message.answer(tr(uid)["city"], reply_markup=cities())
     await call.answer()
 
 
 @dp.callback_query(F.data == "back_district")
-async def back_to_district(call: CallbackQuery):
+async def cb_back_district(call: CallbackQuery):
     uid = call.from_user.id
     profile = get_profile(uid)
     city = profile.get("city")
     items = CITY_DISTRICTS.get(city, [])
-    await call.message.answer(t(uid)["district"], reply_markup=districts(items))
+    await call.message.answer(tr(uid)["district"], reply_markup=districts(items))
     await call.answer()
 
 
-# ----------- Контакты -----------
+# ---------- CONTACT ----------
 
 @dp.callback_query(F.data == "contact")
-async def contact(call: CallbackQuery):
+async def cb_contact(call: CallbackQuery):
     uid = call.from_user.id
-    lang = lang_of(uid)
+    lang = get_lang(uid)
+
     if lang == "en":
         txt = "📞 Contact agent: @your_agent_username"
     elif lang == "bg":
