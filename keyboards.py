@@ -19,14 +19,10 @@ def main_menu(lang: str = "ru"):
 
 
 def cities():
-    # Города можно оставить как есть (названия латиницей)
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Varna", callback_data="city_Varna")],
-        [InlineKeyboardButton(text="Burgas", callback_data="city_Burgas")],
-        [InlineKeyboardButton(text="Sofia", callback_data="city_Sofia")],
         [InlineKeyboardButton(text="⬅️ Back", callback_data="back_menu")],
     ])
-
 
 def districts(items: list[str]):
     # items = ["Center", "Lozenets", ...]
