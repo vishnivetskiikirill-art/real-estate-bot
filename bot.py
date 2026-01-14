@@ -1,67 +1,52 @@
 import asyncio
-import logging
-import os
-
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery
-from aiogram.filters import CommandStart
+from aiogram.types import Message
 
-from config import TELEGRAM_TOKEN
-from texts import TEXTS
-from keyboards import languages
+from config import TELEGRAM_TOKEN, DATABASE_URL
+from db import init_db, close_db, fetch_properties
 
-# ВАЖНО: импорт именно так, из db/db.py
-from db.db import init_db, close_db, fetch_properties
-
-
-logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()
 
-# Храним язык/город пользователя (по user_id)
-user_lang: dict[int, str] = {}
-user_city: dict[int, str] = {}
-
 
 @dp.startup()
-async def on_startup():
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise RuntimeError("DATABASE_URL is not set in Railway Variables")
-
-    await init_db(database_url)
-    logging.info("DB connected")
+async def on_startup() -> None:
+    await init_db(DATABASE_URL)
 
 
 @dp.shutdown()
-async def on_shutdown():
+async def on_shutdown() -> None:
     await close_db()
-    logging.info("DB closed")
 
 
-@dp.message(CommandStart())
-async def start_cmd(message: Message):
-    # язык по умолчанию ru
-    user_lang[message.from_user.id] = "ru"
-    await message.answer(TEXTS["ru"]["start"], reply_markup=languages())
+@dp.message(F.text == "/start")
+async def cmd_start(message: Message):
+    await message.answer(
+        "Привет! Я бот недвижимости.\n\n"
+        "Команды:\n"
+        "/list — показать последние объявления"
+    )
 
 
-@dp.callback_query(F.data.startswith("lang_"))
-async def set_lang(callback: CallbackQuery):
-    lang = callback.data.split("_", 1)[1]  # lang_ru / lang_en
-    user_lang[callback.from_user.id] = lang
+@dp.message(F.text == "/list")
+async def cmd_list(message: Message):
+    items = await fetch_properties(limit=5)
 
-    await callback.message.answer(TEXTS[lang].get("lang_set", "Язык выбран ✅"))
-    await callback.answer()
+    if not items:
+        await message.answer("Пока нет объявлений в базе.")
+        return
 
+    text_parts = []
+    for p in items:
+        text_parts.append(
+            f"#{p['id']} • {p.get('property_type') or '—'}\n"
+            f"{p.get('city') or '—'}, {p.get('district') or '—'}\n"
+            f"Цена: {p.get('price') or '—'}\n"
+            f"{(p.get('description_ru') or '').strip()}\n"
+        )
 
-# Пример команды, чтобы проверить что БД реально работает:
-# (можешь потом убрать)
-@dp.message(F.text == "тест")
-async def test_db(message: Message):
-    rows = await fetch_properties()  # без фильтров
-    await message.answer(f"В базе объявлений: {len(rows)}")
+    await message.answer("\n\n".join(text_parts))
 
 
 async def main():
