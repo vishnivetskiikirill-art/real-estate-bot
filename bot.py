@@ -3,7 +3,7 @@ from aiogram.enums import ParseMode
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from config import BOT_TOKEN, DATABASE_URL
-from db import init_db, close_db, fetch_properties
+from database import connect_db, fetch, execute
 
 dp = Dispatcher()
 
