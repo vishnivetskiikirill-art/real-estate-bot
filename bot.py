@@ -1,214 +1,140 @@
-import os
-import asyncio
-
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.enums import ParseMode
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
-from texts import TEXTS
-from keyboards import (
-    languages,
-    main_menu,
-    cities,
-    districts_varna,
-    property_types,
-    VARNA_DISTRICTS,
-)
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+from config import BOT_TOKEN, DATABASE_URL
+from db import init_db, close_db, fetch_properties
 
 dp = Dispatcher()
 
-# user_id -> {"lang": "ru", "city": "varna", "district_id": "center", "type": "apartment"}
-user_state: dict[int, dict] = {}
+
+# --- Клавиатуры ---
+def kb_languages() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang:ru")],
+        [InlineKeyboardButton(text="🇬🇧 English", callback_data="lang:en")],
+        [InlineKeyboardButton(text="🇧🇬 Български", callback_data="lang:bg")],
+    ])
 
 
-def profile(uid: int) -> dict:
-    if uid not in user_state:
-        user_state[uid] = {"lang": "ru", "city": None, "district_id": None, "type": None}
-    return user_state[uid]
+def kb_main(lang: str) -> InlineKeyboardMarkup:
+    caption = {
+        "ru": "🏠 Показать квартиры",
+        "en": "🏠 Show listings",
+        "bg": "🏠 Покажи обяви",
+    }[lang]
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=caption, callback_data="show")],
+    ])
 
 
-def lang(uid: int) -> str:
-    return profile(uid).get("lang", "ru")
+# --- Память по пользователям (простая) ---
+user_lang: dict[int, str] = {}
 
 
-def tr(uid: int) -> dict:
-    return TEXTS.get(lang(uid), TEXTS["ru"])
+def get_lang(uid: int) -> str:
+    return user_lang.get(uid, "ru")
 
 
-# ---------- /start ----------
+def pick_desc(row: dict, lang: str) -> str:
+    # если пусто — fallback на ru
+    if lang == "ru":
+        return row.get("description_ru") or ""
+    if lang == "en":
+        return row.get("description_en") or row.get("description_ru") or ""
+    if lang == "bg":
+        return row.get("description_bg") or row.get("description_ru") or ""
+    return row.get("description_ru") or ""
+
+
+# --- Handlers ---
+@dp.startup()
+async def on_startup():
+    await init_db(DATABASE_URL)
+
+
+@dp.shutdown()
+async def on_shutdown():
+    await close_db()
+
+
 @dp.message(F.text == "/start")
-async def start_cmd(message: Message):
-    # показываем выбор языка
-    await message.answer(TEXTS["ru"]["start"], reply_markup=languages())
+async def start(message: Message):
+    await message.answer(
+        "Выберите язык / Choose language / Изберете език:",
+        reply_markup=kb_languages(),
+    )
 
 
-# ---------- language ----------
 @dp.callback_query(F.data.startswith("lang:"))
-async def cb_lang(call: CallbackQuery):
-    uid = call.from_user.id
-    p = profile(uid)
+async def set_language(call: CallbackQuery):
+    lang = call.data.split(":")[1]
+    user_lang[call.from_user.id] = lang
 
-    p["lang"] = call.data.split(":", 1)[1]  # ru/en/bg
-    p["city"] = None
-    p["district_id"] = None
-    p["type"] = None
+    welcome = {
+        "ru": "Готово ✅ Нажмите кнопку, чтобы посмотреть квартиры.",
+        "en": "Done ✅ Tap the button to see listings.",
+        "bg": "Готово ✅ Натиснете бутона за обяви.",
+    }[lang]
 
-    await call.message.answer(TEXTS[p["lang"]]["menu"], reply_markup=main_menu(p["lang"]))
+    await call.message.answer(welcome, reply_markup=kb_main(lang))
     await call.answer()
 
 
-# ---------- menu actions ----------
-@dp.callback_query(F.data == "act:buy")
-async def cb_buy(call: CallbackQuery):
+@dp.callback_query(F.data == "show")
+async def show_listings(call: CallbackQuery):
     uid = call.from_user.id
-    p = profile(uid)
+    lang = get_lang(uid)
 
-    p["city"] = None
-    p["district_id"] = None
-    p["type"] = None
+    rows = await fetch_properties(limit=10)
 
-    await call.message.answer(tr(uid)["city"], reply_markup=cities(lang(uid)))
-    await call.answer()
-
-
-@dp.callback_query(F.data == "act:contact")
-async def cb_contact(call: CallbackQuery):
-    uid = call.from_user.id
-    l = lang(uid)
-
-    if l == "en":
-        txt = "📞 Contact agent: @your_agent_username"
-    elif l == "bg":
-        txt = "📞 Контакт: @your_agent_username"
-    else:
-        txt = "📞 Связаться с агентом: @your_agent_username"
-
-    await call.message.answer(txt, reply_markup=main_menu(l))
-    await call.answer()
-
-
-# ---------- city ----------
-@dp.callback_query(F.data == "city:varna")
-async def cb_city(call: CallbackQuery):
-    uid = call.from_user.id
-    p = profile(uid)
-
-    p["city"] = "varna"
-    p["district_id"] = None
-    p["type"] = None
-
-    await call.message.answer(tr(uid)["district"], reply_markup=districts_varna(lang(uid)))
-    await call.answer()
-
-
-# ---------- district ----------
-@dp.callback_query(F.data.startswith("dist:"))
-async def cb_district(call: CallbackQuery):
-    uid = call.from_user.id
-    p = profile(uid)
-
-    dist_id = call.data.split(":", 1)[1]
-    if dist_id not in VARNA_DISTRICTS:
-        await call.answer("Unknown district", show_alert=True)
+    if not rows:
+        msg = {
+            "ru": "Пока нет объявлений в базе.",
+            "en": "No listings in the database yet.",
+            "bg": "Все още няма обяви в базата.",
+        }[lang]
+        await call.message.answer(msg, reply_markup=kb_main(lang))
+        await call.answer()
         return
 
-    p["district_id"] = dist_id
-    p["type"] = None
+    for r in rows:
+        title = (r.get("title") or f"Объект #{r.get('id')}").strip()
+        price = r.get("price")
+        city = (r.get("city") or "Varna").strip()
+        district = (r.get("district") or "").strip()
+        photo_link = (r.get("photo") or "").strip()
+        desc = pick_desc(r, lang).strip()
 
-    l = lang(uid)
-    if l == "en":
-        prompt = "Choose property type:"
-    elif l == "bg":
-        prompt = "Изберете тип имот:"
-    else:
-        prompt = "Выберите тип недвижимости:"
+        # безопасно на случай None
+        price_text = str(price) if price is not None else "—"
 
-    await call.message.answer(prompt, reply_markup=property_types(l))
+        text_lines = [
+            f"<b>{title}</b>",
+            f"💶 Цена: <b>{price_text}</b>",
+            f"📍 {city}" + (f" • {district}" if district else ""),
+        ]
+        if desc:
+            text_lines.append("")
+            text_lines.append(desc)
+
+        if photo_link:
+            text_lines.append("")
+            # ссылка на папку/фото
+            label = {"ru": "Фото/папка", "en": "Photos/folder", "bg": "Снимки/папка"}[lang]
+            text_lines.append(f"📸 {label}: {photo_link}")
+
+        await call.message.answer("\n".join(text_lines))
+
     await call.answer()
-
-
-# ---------- type ----------
-@dp.callback_query(F.data.startswith("type:"))
-async def cb_type(call: CallbackQuery):
-    uid = call.from_user.id
-    p = profile(uid)
-
-    ptype = call.data.split(":", 1)[1]
-    p["type"] = ptype
-
-    l = lang(uid)
-
-    # Красивое название района по языку
-    names = VARNA_DISTRICTS.get(p["district_id"])
-    if names:
-        district_title = names[{"ru": 0, "en": 1, "bg": 2}.get(l, 0)]
-    else:
-        district_title = p["district_id"]
-
-    # Название города по языку
-    city_title = "Varna" if l == "en" else "Варна"
-
-    if l == "en":
-        msg = (
-            f"✅ Selected:\n"
-            f"City: {city_title}\n"
-            f"District: {district_title}\n"
-            f"Type: {ptype}\n\n"
-            f"Next: show listings from DB."
-        )
-    elif l == "bg":
-        msg = (
-            f"✅ Избрано:\n"
-            f"Град: {city_title}\n"
-            f"Квартал: {district_title}\n"
-            f"Тип: {ptype}\n\n"
-            f"Следващо: обяви от базата."
-        )
-    else:
-        msg = (
-            f"✅ Выбрано:\n"
-            f"Город: {city_title}\n"
-            f"Район: {district_title}\n"
-            f"Тип: {ptype}\n\n"
-            f"Дальше: покажем объекты из базы."
-        )
-
-    await call.message.answer(msg, reply_markup=main_menu(l))
-    await call.answer()
-
-
-# ---------- navigation (back) ----------
-@dp.callback_query(F.data == "nav:menu")
-async def nav_menu(call: CallbackQuery):
-    uid = call.from_user.id
-    l = lang(uid)
-    await call.message.answer(TEXTS.get(l, TEXTS["ru"])["menu"], reply_markup=main_menu(l))
-    await call.answer()
-
-
-@dp.callback_query(F.data == "nav:city")
-async def nav_city(call: CallbackQuery):
-    uid = call.from_user.id
-    await call.message.answer(tr(uid)["city"], reply_markup=cities(lang(uid)))
-    await call.answer()
-
-
-@dp.callback_query(F.data == "nav:dist")
-async def nav_dist(call: CallbackQuery):
-    uid = call.from_user.id
-    await call.message.answer(tr(uid)["district"], reply_markup=districts_varna(lang(uid)))
-    await call.answer()
-
-
-# ---------- entry ----------
-async def main():
-    if not BOT_TOKEN:
-        raise RuntimeError("BOT_TOKEN is not set")
-
-    bot = Bot(token=BOT_TOKEN)
-    await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
+    import asyncio
+
+    bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+
+    async def main():
+        await dp.start_polling(bot)
+
     asyncio.run(main())
