@@ -1,140 +1,72 @@
+import asyncio
+import logging
+import os
+
 from aiogram import Bot, Dispatcher, F
-from aiogram.enums import ParseMode
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery
+from aiogram.filters import CommandStart
 
-from config import BOT_TOKEN, DATABASE_URL
-from database import connect_db, fetch, execute
+from config import TELEGRAM_TOKEN
+from texts import TEXTS
+from keyboards import languages
 
+# ВАЖНО: импорт именно так, из db/db.py
+from db.db import init_db, close_db, fetch_properties
+
+
+logging.basicConfig(level=logging.INFO)
+
+bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()
 
-
-# --- Клавиатуры ---
-def kb_languages() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang:ru")],
-        [InlineKeyboardButton(text="🇬🇧 English", callback_data="lang:en")],
-        [InlineKeyboardButton(text="🇧🇬 Български", callback_data="lang:bg")],
-    ])
-
-
-def kb_main(lang: str) -> InlineKeyboardMarkup:
-    caption = {
-        "ru": "🏠 Показать квартиры",
-        "en": "🏠 Show listings",
-        "bg": "🏠 Покажи обяви",
-    }[lang]
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=caption, callback_data="show")],
-    ])
-
-
-# --- Память по пользователям (простая) ---
+# Храним язык/город пользователя (по user_id)
 user_lang: dict[int, str] = {}
+user_city: dict[int, str] = {}
 
 
-def get_lang(uid: int) -> str:
-    return user_lang.get(uid, "ru")
-
-
-def pick_desc(row: dict, lang: str) -> str:
-    # если пусто — fallback на ru
-    if lang == "ru":
-        return row.get("description_ru") or ""
-    if lang == "en":
-        return row.get("description_en") or row.get("description_ru") or ""
-    if lang == "bg":
-        return row.get("description_bg") or row.get("description_ru") or ""
-    return row.get("description_ru") or ""
-
-
-# --- Handlers ---
 @dp.startup()
 async def on_startup():
-    await init_db(DATABASE_URL)
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL is not set in Railway Variables")
+
+    await init_db(database_url)
+    logging.info("DB connected")
 
 
 @dp.shutdown()
 async def on_shutdown():
     await close_db()
+    logging.info("DB closed")
 
 
-@dp.message(F.text == "/start")
-async def start(message: Message):
-    await message.answer(
-        "Выберите язык / Choose language / Изберете език:",
-        reply_markup=kb_languages(),
-    )
+@dp.message(CommandStart())
+async def start_cmd(message: Message):
+    # язык по умолчанию ru
+    user_lang[message.from_user.id] = "ru"
+    await message.answer(TEXTS["ru"]["start"], reply_markup=languages())
 
 
-@dp.callback_query(F.data.startswith("lang:"))
-async def set_language(call: CallbackQuery):
-    lang = call.data.split(":")[1]
-    user_lang[call.from_user.id] = lang
+@dp.callback_query(F.data.startswith("lang_"))
+async def set_lang(callback: CallbackQuery):
+    lang = callback.data.split("_", 1)[1]  # lang_ru / lang_en
+    user_lang[callback.from_user.id] = lang
 
-    welcome = {
-        "ru": "Готово ✅ Нажмите кнопку, чтобы посмотреть квартиры.",
-        "en": "Done ✅ Tap the button to see listings.",
-        "bg": "Готово ✅ Натиснете бутона за обяви.",
-    }[lang]
-
-    await call.message.answer(welcome, reply_markup=kb_main(lang))
-    await call.answer()
+    await callback.message.answer(TEXTS[lang].get("lang_set", "Язык выбран ✅"))
+    await callback.answer()
 
 
-@dp.callback_query(F.data == "show")
-async def show_listings(call: CallbackQuery):
-    uid = call.from_user.id
-    lang = get_lang(uid)
+# Пример команды, чтобы проверить что БД реально работает:
+# (можешь потом убрать)
+@dp.message(F.text == "тест")
+async def test_db(message: Message):
+    rows = await fetch_properties()  # без фильтров
+    await message.answer(f"В базе объявлений: {len(rows)}")
 
-    rows = await fetch_properties(limit=10)
 
-    if not rows:
-        msg = {
-            "ru": "Пока нет объявлений в базе.",
-            "en": "No listings in the database yet.",
-            "bg": "Все още няма обяви в базата.",
-        }[lang]
-        await call.message.answer(msg, reply_markup=kb_main(lang))
-        await call.answer()
-        return
-
-    for r in rows:
-        title = (r.get("title") or f"Объект #{r.get('id')}").strip()
-        price = r.get("price")
-        city = (r.get("city") or "Varna").strip()
-        district = (r.get("district") or "").strip()
-        photo_link = (r.get("photo") or "").strip()
-        desc = pick_desc(r, lang).strip()
-
-        # безопасно на случай None
-        price_text = str(price) if price is not None else "—"
-
-        text_lines = [
-            f"<b>{title}</b>",
-            f"💶 Цена: <b>{price_text}</b>",
-            f"📍 {city}" + (f" • {district}" if district else ""),
-        ]
-        if desc:
-            text_lines.append("")
-            text_lines.append(desc)
-
-        if photo_link:
-            text_lines.append("")
-            # ссылка на папку/фото
-            label = {"ru": "Фото/папка", "en": "Photos/folder", "bg": "Снимки/папка"}[lang]
-            text_lines.append(f"📸 {label}: {photo_link}")
-
-        await call.message.answer("\n".join(text_lines))
-
-    await call.answer()
+async def main():
+    await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
-    import asyncio
-
-    bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
-
-    async def main():
-        await dp.start_polling(bot)
-
     asyncio.run(main())
