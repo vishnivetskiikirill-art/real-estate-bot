@@ -1,93 +1,159 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from texts import TEXTS
 
-# Районы Варны: id -> (ru, en, bg)
-VARNA_DISTRICTS = {
-    "center": ("Центр", "Center", "Център"),
-    "asparuhovo": ("Аспарухово", "Asparuhovo", "Аспарухово"),
-    "galata": ("Галата", "Galata", "Галата"),
-    "briz": ("Бриз", "Briz", "Бриз"),
-    "chayka": ("Чайка", "Chayka", "Чайка"),
-    "levski": ("Левски", "Levski", "Левски"),
-    "mladost": ("Младост", "Mladost", "Младост"),
-    "vazrazhdane": ("Возрождение", "Vazrazhdane", "Възраждане"),
-    "vladislavovo": ("Владиславово", "Vladislavovo", "Владислав Варненчик"),
-    "kaisieva": ("Кайсиева градина", "Kaisieva gradina", "Кайсиева градина"),
-    "troshevo": ("Трошево", "Troshevo", "Трошево"),
-    "pobeda": ("Победа", "Pobeda", "Победа"),
-    "izgrev": ("Изгрев", "Izgrev", "Изгрев"),
-    "tsveten": ("Цветен квартал", "Tsveten kvartal", "Цветен квартал"),
-    "hr_botev": ("Христо Ботев", "Hristo Botev", "Христо Ботев"),
-    "kolhozen": ("Колхозен пазар", "Kolhozen pazar", "Колхозен пазар"),
-    "pogrebite": ("Погребите", "Pogrebite", "Погребите"),
-    "greek": ("Греческий квартал", "Greek quarter", "Гръцката махала"),
-    "maksuda": ("Максуда", "Maksuda", "Максуда"),
-    "morska": ("Морской сад", "Sea Garden", "Морската градина"),
-    "vinitsa": ("Виница", "Vinitsa", "Виница"),
-    "alenmak": ("Ален мак", "Alen Mak", "Ален мак"),
-    "euxino": ("Евксиноград", "Euxinograd", "Евксиноград"),
-    "trakata": ("Траката", "Trakata", "Траката"),
-    "golden": ("Золотые пески", "Golden Sands", "Златни пясъци"),
-    "konst": ("Константин и Елена", "St. Constantine & Helena", "Св. св. Константин и Елена"),
+# ---------- Локализованные подписи ----------
+
+LANG_LABELS = {
+    "ru": "🇷🇺 Русский",
+    "en": "🇬🇧 English",
+    "bg": "🇧🇬 Български",
+    "he": "🇮🇱 עברית",
 }
 
-# Типы: id -> (ru, en, bg)
-PROPERTY_TYPES = {
-    "apartment": ("🏢 Квартира", "🏢 Apartment", "🏢 Апартамент"),
-    "house": ("🏠 Дом", "🏠 House", "🏠 Къща"),
-    "studio": ("🏬 Студия", "🏬 Studio", "🏬 Студио"),
+CITY_LABELS = {
+    "varna": {
+        "ru": "🏙 Варна",
+        "en": "🏙 Varna",
+        "bg": "🏙 Варна",
+        "he": "🏙 ורנה",
+    }
+}
+
+DISTRICT_LABELS = {
+    # КОД -> подписи на 4 языках
+    "center": {
+        "ru": "Центр",
+        "en": "Center",
+        "bg": "Център",
+        "he": "מרכז",
+    },
+    "levski": {
+        "ru": "Левски",
+        "en": "Levski",
+        "bg": "Левски",
+        "he": "לבסקי",
+    },
+    "chaika": {
+        "ru": "Чайка",
+        "en": "Chayka",
+        "bg": "Чайка",
+        "he": "צ'איקה",
+    },
+    "vladislavovo": {
+        "ru": "Владиславово",
+        "en": "Vladislavovo",
+        "bg": "Владиславово",
+        "he": "ולדיסלבובו",
+    },
+    "asparuhovo": {
+        "ru": "Аспарухово",
+        "en": "Asparuhovo",
+        "bg": "Аспарухово",
+        "he": "אספרוחובו",
+    },
+    "briz": {
+        "ru": "Бриз",
+        "en": "Briz",
+        "bg": "Бриз",
+        "he": "בריז",
+    },
+    "mladost": {
+        "ru": "Младост",
+        "en": "Mladost",
+        "bg": "Младост",
+        "he": "מלאדוסט",
+    },
+    "troshevo": {
+        "ru": "Трошево",
+        "en": "Troshevo",
+        "bg": "Трошево",
+        "he": "טרושבו",
+    },
+    "galata": {
+        "ru": "Галата",
+        "en": "Galata",
+        "bg": "Галата",
+        "he": "גלאטה",
+    },
+    "vinitsa": {
+        "ru": "Виница",
+        "en": "Vinitsa",
+        "bg": "Виница",
+        "he": "ויניצה",
+    },
+}
+
+TYPE_LABELS = {
+    "apartment": {
+        "ru": "🏠 Квартира",
+        "en": "🏠 Apartment",
+        "bg": "🏠 Апартамент",
+        "he": "🏠 דירה",
+    },
+    "house": {
+        "ru": "🏡 Дом",
+        "en": "🏡 House",
+        "bg": "🏡 Къща",
+        "he": "🏡 בית",
+    },
+    "studio": {
+        "ru": "🏢 Студия",
+        "en": "🏢 Studio",
+        "bg": "🏢 Студио",
+        "he": "🏢 סטודיו",
+    },
+    "commercial": {
+        "ru": "🏬 Коммерческая",
+        "en": "🏬 Commercial",
+        "bg": "🏬 Търговски",
+        "he": "🏬 מסחרי",
+    },
+}
+
+UI = {
+    "back_city": {"ru": "↩️ Назад к городу", "en": "↩️ Back to city", "bg": "↩️ Назад към града", "he": "↩️ חזרה לעיר"},
+    "back_district": {"ru": "↩️ Назад к районам", "en": "↩️ Back to districts", "bg": "↩️ Назад към районите", "he": "↩️ חזרה לאזורים"},
 }
 
 
-def _idx(lang: str) -> int:
-    return {"ru": 0, "en": 1, "bg": 2}.get(lang, 0)
+# ---------- Клавиатуры ----------
+
+def language_keyboard() -> InlineKeyboardMarkup:
+    # выбор языка одинаковый для всех
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=LANG_LABELS["ru"], callback_data="lang:ru")],
+            [InlineKeyboardButton(text=LANG_LABELS["en"], callback_data="lang:en")],
+            [InlineKeyboardButton(text=LANG_LABELS["bg"], callback_data="lang:bg")],
+            [InlineKeyboardButton(text=LANG_LABELS["he"], callback_data="lang:he")],
+        ]
+    )
 
 
-def languages():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang:ru")],
-        [InlineKeyboardButton(text="🇬🇧 English", callback_data="lang:en")],
-        [InlineKeyboardButton(text="🇧🇬 Български", callback_data="lang:bg")],
-    ])
+def city_keyboard(lang: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=CITY_LABELS["varna"][lang], callback_data="city:varna")],
+        ]
+    )
 
 
-def main_menu(lang: str = "ru"):
-    t = TEXTS.get(lang, TEXTS["ru"])
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=t["buy"], callback_data="act:buy")],
-        [InlineKeyboardButton(text=t["contact"], callback_data="act:contact")],
-    ])
+def varna_districts_keyboard(lang: str) -> InlineKeyboardMarkup:
+    # порядок районов — как ты хочешь показывать
+    order = ["center", "levski", "chaika", "vladislavovo", "asparuhovo", "briz", "mladost", "troshevo", "galata", "vinitsa"]
+
+    keyboard = []
+    for code in order:
+        keyboard.append([InlineKeyboardButton(text=DISTRICT_LABELS[code][lang], callback_data=f"district:varna:{code}")])
+
+    keyboard.append([InlineKeyboardButton(text=UI["back_city"][lang], callback_data="back:city")])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def cities(lang: str = "ru"):
-    i = _idx(lang)
-    city_name = ("Варна", "Varna", "Варна")[i]
-    back = ("⬅️ Назад", "⬅️ Back", "⬅️ Назад")[i]
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=city_name, callback_data="city:varna")],
-        [InlineKeyboardButton(text=back, callback_data="nav:menu")],
-    ])
+def property_type_keyboard(lang: str) -> InlineKeyboardMarkup:
+    order = ["apartment", "house", "studio", "commercial"]
+    keyboard = []
+    for code in order:
+        keyboard.append([InlineKeyboardButton(text=TYPE_LABELS[code][lang], callback_data=f"type:{code}")])
 
-
-def districts_varna(lang: str = "ru"):
-    i = _idx(lang)
-    back = ("⬅️ Назад", "⬅️ Back", "⬅️ Назад")[i]
-
-    kb = []
-    for did, names in VARNA_DISTRICTS.items():
-        kb.append([InlineKeyboardButton(text=names[i], callback_data=f"dist:{did}")])
-
-    kb.append([InlineKeyboardButton(text=back, callback_data="nav:city")])
-    return InlineKeyboardMarkup(inline_keyboard=kb)
-
-
-def property_types(lang: str = "ru"):
-    i = _idx(lang)
-    back = ("⬅️ Назад", "⬅️ Back", "⬅️ Назад")[i]
-
-    kb = []
-    for tid, labels in PROPERTY_TYPES.items():
-        kb.append([InlineKeyboardButton(text=labels[i], callback_data=f"type:{tid}")])
-
-    kb.append([InlineKeyboardButton(text=back, callback_data="nav:dist")])
-    return InlineKeyboardMarkup(inline_keyboard=kb)
+    keyboard.append([InlineKeyboardButton(text=UI["back_district"][lang], callback_data="back:district")])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
