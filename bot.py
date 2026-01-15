@@ -1,57 +1,111 @@
-import asyncio
-from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message
+from keyboards import (
+    language_keyboard, city_keyboard, varna_districts_keyboard, property_type_keyboard,
+    CITY_LABELS, DISTRICT_LABELS, TYPE_LABELS
+)
 
-from config import TELEGRAM_TOKEN, DATABASE_URL
-from db import init_db, close_db, fetch_properties
+# ... + твои импорты db: get_user_lang, set_user_lang, set_user_city, set_user_district, set_user_property_type, get_user_filters
+
+TEXTS = {
+    "choose_lang": {
+        "ru": "Добро пожаловать! Выберите язык:",
+        "en": "Welcome! Choose a language:",
+        "bg": "Добре дошли! Изберете език:",
+        "he": "ברוכים הבאים! בחרו שפה:",
+    },
+    "choose_city": {
+        "ru": "Выберите город:",
+        "en": "Choose a city:",
+        "bg": "Изберете град:",
+        "he": "בחרו עיר:",
+    },
+    "choose_district": {
+        "ru": "Выберите район:",
+        "en": "Choose a district:",
+        "bg": "Изберете район:",
+        "he": "בחרו אזור:",
+    },
+    "choose_type": {
+        "ru": "Выберите тип недвижимости:",
+        "en": "Choose property type:",
+        "bg": "Изберете тип имот:",
+        "he": "בחרו סוג נכס:",
+    },
+}
+
+async def resolve_lang(user_id: int) -> str:
+    lang = await get_user_lang(user_id)
+    return lang or "ru"
 
 
-bot = Bot(token=TELEGRAM_TOKEN)
-dp = Dispatcher()
-
-
-@dp.startup()
-async def on_startup() -> None:
-    await init_db(DATABASE_URL)
-
-
-@dp.shutdown()
-async def on_shutdown() -> None:
-    await close_db()
-
-
-@dp.message(F.text == "/start")
+@dp.message(Command("start"))
 async def cmd_start(message: Message):
-    await message.answer(
-        "Привет! Я бот недвижимости.\n\n"
-        "Команды:\n"
-        "/list — показать последние объявления"
-    )
+    user_id = message.from_user.id
+    lang = await get_user_lang(user_id)
 
-
-@dp.message(F.text == "/list")
-async def cmd_list(message: Message):
-    items = await fetch_properties(limit=5)
-
-    if not items:
-        await message.answer("Пока нет объявлений в базе.")
+    if not lang:
+        await message.answer(TEXTS["choose_lang"]["ru"], reply_markup=language_keyboard())
         return
 
-    text_parts = []
-    for p in items:
-        text_parts.append(
-            f"#{p['id']} • {p.get('property_type') or '—'}\n"
-            f"{p.get('city') or '—'}, {p.get('district') or '—'}\n"
-            f"Цена: {p.get('price') or '—'}\n"
-            f"{(p.get('description_ru') or '').strip()}\n"
-        )
-
-    await message.answer("\n\n".join(text_parts))
+    await message.answer(TEXTS["choose_city"][lang], reply_markup=city_keyboard(lang))
 
 
-async def main():
-    await dp.start_polling(bot)
+@dp.callback_query(F.data.startswith("lang:"))
+async def on_lang_selected(call: CallbackQuery):
+    await call.answer()
+    lang = call.data.split(":", 1)[1]
+    if lang not in ("ru", "en", "bg", "he"):
+        lang = "ru"
+    await set_user_lang(call.from_user.id, lang)
+
+    await call.message.answer(TEXTS["choose_city"][lang], reply_markup=city_keyboard(lang))
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+@dp.callback_query(F.data == "city:varna")
+async def on_city_selected(call: CallbackQuery):
+    await call.answer()
+    lang = await resolve_lang(call.from_user.id)
+
+    await set_user_city(call.from_user.id, "varna")
+    await call.message.answer(TEXTS["choose_district"][lang], reply_markup=varna_districts_keyboard(lang))
+
+
+@dp.callback_query(F.data.startswith("district:varna:"))
+async def on_district_selected(call: CallbackQuery):
+    await call.answer()
+    lang = await resolve_lang(call.from_user.id)
+
+    district_code = call.data.split(":", 2)[2]  # center/levski/...
+    await set_user_district(call.from_user.id, district_code)
+
+    await call.message.answer(TEXTS["choose_type"][lang], reply_markup=property_type_keyboard(lang))
+
+
+@dp.callback_query(F.data.startswith("type:"))
+async def on_type_selected(call: CallbackQuery):
+    await call.answer()
+    property_type_code = call.data.split(":", 1)[1]
+    await set_user_property_type(call.from_user.id, property_type_code)
+
+    lang = await resolve_lang(call.from_user.id)
+    # Можно сразу вызвать list или просто сказать
+    msg = {
+        "ru": "Готово ✅ Теперь нажмите /list чтобы увидеть объявления по выбранным фильтрам.",
+        "en": "Done ✅ Now type /list to see listings for your filters.",
+        "bg": "Готово ✅ Сега натиснете /list за обявите по филтрите.",
+        "he": "מוכן ✅ עכשיו כתבו /list כדי לראות מודעות לפי המסננים.",
+    }
+    await call.message.answer(msg[lang])
+
+
+@dp.callback_query(F.data == "back:city")
+async def back_to_city(call: CallbackQuery):
+    await call.answer()
+    lang = await resolve_lang(call.from_user.id)
+    await call.message.answer(TEXTS["choose_city"][lang], reply_markup=city_keyboard(lang))
+
+
+@dp.callback_query(F.data == "back:district")
+async def back_to_district(call: CallbackQuery):
+    await call.answer()
+    lang = await resolve_lang(call.from_user.id)
+    await call.message.answer(TEXTS["choose_district"][lang], reply_markup=varna_districts_keyboard(lang))
